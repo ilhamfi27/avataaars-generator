@@ -13,7 +13,9 @@ interface SelectProps {
   controlId: string
   label: string
   value: string
+  isLocked?: boolean
   onChange?: (value: string) => void
+  onToggleLock?: () => void
 }
 
 // ref: https://stackoverflow.com/a/1714899/25077
@@ -29,16 +31,29 @@ const serializeQuery = function (obj: any) {
 
 class OptionSelect extends React.Component<SelectProps> {
   render() {
-    const { controlId, label, value, children } = this.props
+    const { controlId, label, value, children, isLocked, onToggleLock } =
+      this.props
     return (
       <FormGroup className='row' controlId={controlId}>
         <Col as={FormLabel} sm={3}>
           {label}
         </Col>
-        <Col sm={9}>
+        <Col sm={8}>
           <FormControl as='select' value={value} onChange={this.onChange}>
             {children}
           </FormControl>
+        </Col>
+        <Col sm={1} style={{ paddingTop: '7px', textAlign: 'center' }}>
+          <i
+            className={isLocked ? 'fa fa-lock' : 'fa fa-unlock'}
+            onClick={onToggleLock}
+            title={isLocked ? 'Unlock this option' : 'Lock this option'}
+            style={{
+              cursor: 'pointer',
+              fontSize: '16px',
+              color: isLocked ? '#6A39D7' : '#999',
+            }}
+          />
         </Col>
       </FormGroup>
     )
@@ -56,15 +71,26 @@ export interface Props {
   optionContext: OptionContext
   displayingCode: boolean
   displayingImg: boolean
+  lockedOptions?: Set<string>
   onDownloadPNG?: () => void
   onDownloadSVG?: () => void
   onAvatarStyleChange?: (avatarStyle: AvatarStyle) => void
   onToggleCode?: () => void
   onToggleImg?: () => void
+  onToggleLock?: (optionKey: string) => void
 }
 
-export default class AvatarForm extends React.Component<Props> {
+interface State {
+  lockedOptions: Set<string>
+}
+
+export default class AvatarForm extends React.Component<Props, State> {
   private onChangeCache: Array<(value: string) => void> = []
+  private onToggleLockCache: Array<() => void> = []
+
+  state: State = {
+    lockedOptions: new Set<string>(),
+  }
 
   UNSAFE_componentWillMount() {
     const { optionContext } = this.props
@@ -74,33 +100,42 @@ export default class AvatarForm extends React.Component<Props> {
     this.onChangeCache = optionContext.options.map((option) =>
       this.onChange.bind(this, option)
     )
+    this.onToggleLockCache = optionContext.options.map((option) =>
+      this.onToggleLock.bind(this, option.key)
+    )
   }
 
   render() {
     const { optionContext, avatarStyle, displayingImg, displayingCode } =
       this.props
-    const selects = optionContext.options.map((option, index) => {
-      const optionState = optionContext.getOptionState(option.key)!
-      if (optionState.available <= 0) {
-        return null
-      }
-      const selectOptions = optionState.options.map((type) => (
-        <option key={type} value={type}>
-          {type}
-        </option>
-      ))
-      const value = optionContext.getValue(option.key)!
-      return (
-        <OptionSelect
-          key={option.key}
-          controlId={option.key}
-          label={option.label}
-          value={value}
-          onChange={this.onChangeCache[index]}>
-          {selectOptions}
-        </OptionSelect>
-      )
-    })
+    const { lockedOptions } = this.state
+    const selects = optionContext.options
+      .map((option, index) => {
+        const optionState = optionContext.getOptionState(option.key)!
+        if (optionState.available <= 0) {
+          return null
+        }
+        const selectOptions = optionState.options.map((type) => (
+          <option key={type} value={type}>
+            {type}
+          </option>
+        ))
+        const value = optionContext.getValue(option.key)!
+        const isLocked = lockedOptions.has(option.key)
+        return (
+          <OptionSelect
+            key={option.key}
+            controlId={option.key}
+            label={option.label}
+            value={value}
+            isLocked={isLocked}
+            onChange={this.onChangeCache[index]}
+            onToggleLock={this.onToggleLockCache[index]}>
+            {selectOptions}
+          </OptionSelect>
+        )
+      })
+      .filter((select) => select !== null)
     const labelCol = 3
     const inputCol = 9
     return (
@@ -201,6 +236,10 @@ export default class AvatarForm extends React.Component<Props> {
 
   private onChange(option: Option, value: string) {
     const { optionContext } = this.props
+    const { lockedOptions } = this.state
+    if (lockedOptions.has(option.key)) {
+      return
+    }
     optionContext.setValue(option.key, value)
   }
 
@@ -237,4 +276,19 @@ export default class AvatarForm extends React.Component<Props> {
       this.props.onToggleImg()
     }
   }
+
+  private onToggleLock = (optionKey: string) => {
+    this.setState((prevState) => {
+      const newLockedOptions = new Set(prevState.lockedOptions)
+      if (newLockedOptions.has(optionKey)) {
+        newLockedOptions.delete(optionKey)
+      } else {
+        newLockedOptions.add(optionKey)
+      }
+
+      return { lockedOptions: newLockedOptions }
+    })
+  }
+
+  public getLockedOptions = (): Set<string> => this.state.lockedOptions
 }

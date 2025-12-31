@@ -23,6 +23,7 @@ interface Props {
   avatarStyle: AvatarStyle
   onChangeUrlQueryParams: (params: any, updateType: string) => void
   onChangeAvatarStyle: (avatarStyle: AvatarStyle) => void
+  [key: string]: any // Allow dynamic properties from addUrlProps
 }
 
 const updateType = UrlUpdateTypes.pushIn
@@ -66,6 +67,7 @@ export class Main extends React.Component<Props, State> {
 
   private avatarRef: Avatar | null = null
   private canvasRef: HTMLCanvasElement | null = null
+  private avatarFormRef: AvatarForm | null = null
   private optionContext: OptionContext = new OptionContext(allOptions)
 
   getChildContext() {
@@ -131,6 +133,7 @@ export class Main extends React.Component<Props, State> {
           <Avatar ref={this.onAvatarRef} avatarStyle={avatarStyle} />
         </div>
         <AvatarForm
+          ref={this.onAvatarFormRef}
           optionContext={this.optionContext}
           avatarStyle={avatarStyle}
           displayingCode={displayComponentCode}
@@ -161,6 +164,10 @@ export class Main extends React.Component<Props, State> {
     this.avatarRef = ref
   }
 
+  private onAvatarFormRef = (ref: AvatarForm) => {
+    this.avatarFormRef = ref
+  }
+
   private onCanvasRef = (ref: HTMLCanvasElement) => {
     this.canvasRef = ref
   }
@@ -182,12 +189,22 @@ export class Main extends React.Component<Props, State> {
 
   private onRandom = () => {
     const { optionContext } = this
+    const lockedOptions =
+      this.avatarFormRef?.getLockedOptions() || new Set<string>()
     let values: { [index: string]: string } = {
       avatarStyle: this.props.avatarStyle,
     }
 
     for (const option of optionContext.options) {
       if (option.key in values) {
+        continue
+      }
+      // For locked options, preserve their current value
+      if (lockedOptions.has(option.key)) {
+        const currentValue = optionContext.getValue(option.key)
+        if (currentValue) {
+          values[option.key] = currentValue
+        }
         continue
       }
       const optionState = optionContext.getOptionState(option.key)!
